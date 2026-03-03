@@ -34,6 +34,11 @@ import { parseAriaSnapshot } from '@isomorphic/ariaSnapshot';
 
 export type RecorderViewMode = 'code' | 'testCase';
 
+export type SessionSnapshot = {
+  stepState: { currentStepIndex: number; stepDescriptions: string[] } | null;
+  stepBodies: string[];
+};
+
 export interface RecorderProps {
   sources: Source[],
   paused: boolean,
@@ -41,16 +46,22 @@ export interface RecorderProps {
   mode: Mode,
   onEditedCode?: (code: string) => any,
   onCursorActivity?: (position: { line: number }) => any,
+  sessionsTabContent?: React.ReactNode,
 }
 
-export const Recorder: React.FC<RecorderProps> = ({
+export interface RecorderHandle {
+  getSessionSnapshot(): SessionSnapshot;
+}
+
+export const Recorder = React.forwardRef<RecorderHandle, RecorderProps>(function Recorder({
   sources,
   paused,
   log,
   mode,
   onEditedCode,
   onCursorActivity,
-}) => {
+  sessionsTabContent,
+}, ref) {
   const [selectedFileId, setSelectedFileId] = React.useState<string | undefined>();
   const [runningFileId, setRunningFileId] = React.useState<string | undefined>();
   const [selectedTab, setSelectedTab] = useSetting<string>('recorderPropertiesTab', 'log');
@@ -63,8 +74,18 @@ export const Recorder: React.FC<RecorderProps> = ({
   const [viewMode, setViewMode] = React.useState<RecorderViewMode>('code');
   const [stepBodies, setStepBodies] = React.useState<string[]>(['']);
 
+  React.useImperativeHandle(ref, () => ({
+    getSessionSnapshot(): SessionSnapshot {
+      return { stepState, stepBodies };
+    },
+  }), [stepState, stepBodies]);
+
   React.useEffect(() => {
-    window.playwrightSetStepState = (state: { currentStepIndex: number; stepDescriptions: string[] }) => setStepState(state);
+    window.playwrightSetStepState = (state: { currentStepIndex: number; stepDescriptions: string[] }, stepBodiesFromMsg?: string[]) => {
+      setStepState(state);
+      if (stepBodiesFromMsg && Array.isArray(stepBodiesFromMsg))
+        setStepBodies(stepBodiesFromMsg);
+    };
     return () => {
       window.playwrightSetStepState = undefined;
     };
@@ -322,6 +343,11 @@ export const Recorder: React.FC<RecorderProps> = ({
               title: 'Aria',
               render: () => <CodeMirrorWrapper text={ariaSnapshot || ''} placeholder='Type aria template to match' language={'yaml'} onChange={onAriaEditorChange} highlight={ariaSnapshotErrors} wrapLines={true} />
             },
+            ...(sessionsTabContent ? [{
+              id: 'sessions',
+              title: 'Sessions',
+              render: () => <>{sessionsTabContent}</>,
+            }] : []),
           ]}
           selectedTab={selectedTab}
           setSelectedTab={setSelectedTab}
@@ -370,4 +396,4 @@ export const Recorder: React.FC<RecorderProps> = ({
       </div>}
     />
   </div>;
-};
+});

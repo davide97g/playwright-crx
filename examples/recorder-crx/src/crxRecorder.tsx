@@ -20,8 +20,12 @@ import { ToolbarButton, ToolbarSeparator } from '@web/components/toolbarButton';
 import { Dialog } from './dialog';
 import { PreferencesForm } from './preferencesForm';
 import type { CallLog, ElementInfo, Mode, Source } from '@recorder/recorderTypes';
+import type { RecorderHandle } from '@recorder/recorder';
 import { Recorder } from '@recorder/recorder';
 import type { CrxSettings } from './settings';
+import type { PersistedSession } from './sessionsDb';
+import { defaultSessionName, deleteSession as deleteSessionDb, generateSessionId, getSession as getSessionDb, getSessions as getSessionsDb, saveSession as saveSessionDb } from './sessionsDb';
+import { SessionListView } from './SessionListView';
 import { addSettingsChangedListener, defaultSettings, loadSettings, removeSettingsChangedListener } from './settings';
 import ModalContainer, { create as createModal } from 'react-modal-promise';
 import { SaveCodeForm } from './saveCodeForm';
@@ -71,12 +75,14 @@ const codegenFilenames: Record<string, string> = {
 
 export const CrxRecorder: React.FC = ({
 }) => {
+  const recorderRef = React.useRef<RecorderHandle>(null);
   const [settings, setSettings] = React.useState<CrxSettings>(defaultSettings);
   const [sources, setSources] = React.useState<Source[]>([]);
   const [paused, setPaused] = React.useState(false);
   const [log, setLog] = React.useState(new Map<string, CallLog>());
   const [mode, setMode] = React.useState<Mode>('none');
   const [selectedFileId, setSelectedFileId] = React.useState<string>(defaultSettings.targetLanguage);
+  const [sessions, setSessions] = React.useState<PersistedSession[]>([]);
 
   React.useEffect(() => {
     const port = chrome.runtime.connect({ name: 'recorder' });
@@ -100,7 +106,7 @@ export const CrxRecorder: React.FC = ({
         case 'setRunningFile': setRunningFileId(msg.file); break;
         case 'setStepState': {
           if (typeof window.playwrightSetStepState === 'function')
-            window.playwrightSetStepState(msg.stepState);
+            window.playwrightSetStepState(msg.stepState, msg.stepBodies);
           break;
         }
         case 'elementPicked': setElementPicked(msg.elementInfo, msg.userGesture); break;
@@ -120,11 +126,61 @@ export const CrxRecorder: React.FC = ({
 
     addSettingsChangedListener(setSettings);
 
+    getSessionsDb().then(setSessions).catch(() => {});
+
     return () => {
       removeSettingsChangedListener(setSettings);
       port.disconnect();
     };
   }, []);
+
+  const refreshSessions = React.useCallback(() => {
+    getSessionsDb().then(setSessions).catch(() => {});
+  }, []);
+
+  const handleSaveCurrentSession = React.useCallback(() => {
+    const snapshot = recorderRef.current?.getSessionSnapshot();
+    if (!snapshot || !sources.length)
+      return;
+    const now = Date.now();
+    const session: PersistedSession = {
+      id: generateSessionId(),
+      name: defaultSessionName(),
+      createdAt: now,
+      updatedAt: now,
+      sources,
+      stepState: snapshot.stepState ?? { currentStepIndex: 0, stepDescriptions: ['Start'] },
+      stepBodies: snapshot.stepBodies.length ? snapshot.stepBodies : [''],
+    };
+    saveSessionDb(session).then(refreshSessions).catch(() => {});
+  }, [sources, refreshSessions]);
+
+  const handleLoadSession = React.useCallback((session: PersistedSession) => {
+    window.dispatch({ event: 'loadSession', params: { sources: session.sources, stepState: session.stepState, stepBodies: session.stepBodies } });
+  }, []);
+
+  const handleRenameSession = React.useCallback(async (id: string, newName: string) => {
+    const session = await getSessionDb(id);
+    if (!session)
+      return;
+    await saveSessionDb({ ...session, name: newName });
+    refreshSessions();
+  }, [refreshSessions]);
+
+  const handleDeleteSession = React.useCallback((id: string) => {
+    deleteSessionDb(id).then(refreshSessions).catch(() => {});
+  }, [refreshSessions]);
+
+  const sessionsTabContent = React.useMemo(() => (
+    <SessionListView
+      sessions={sessions}
+      onSaveCurrent={handleSaveCurrentSession}
+      onRestart={handleLoadSession}
+      onRename={handleRenameSession}
+      onDelete={handleDeleteSession}
+      saveDisabled={!sources.length}
+    />
+  ), [sessions, handleSaveCurrentSession, handleLoadSession, handleRenameSession, handleDeleteSession, sources.length]);
 
   const source = React.useMemo(() => sources.find(s => s.id === selectedFileId), [sources, selectedFileId]);
 
@@ -210,7 +266,16 @@ export const CrxRecorder: React.FC = ({
           <ToolbarButton icon='settings-gear' title='Preferences' onClick={showPreferences}></ToolbarButton>
         </Toolbar>
       </>}
-      <Recorder sources={sources} paused={paused} log={log} mode={mode} onEditedCode={dispatchEditedCode} onCursorActivity={dispatchCursorActivity} />
+      <Recorder
+        ref={recorderRef}
+        sources={sources}
+        paused={paused}
+        log={log}
+        mode={mode}
+        onEditedCode={dispatchEditedCode}
+        onCursorActivity={dispatchCursorActivity}
+        sessionsTabContent={sessionsTabContent}
+      />
     </div>
   </>;
 };

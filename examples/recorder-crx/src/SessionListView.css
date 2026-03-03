@@ -1,0 +1,71 @@
+.session-list-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.session-list-toolbar {
+  flex-shrink: 0;
+  padding: 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.session-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.session-list-empty {
+  padding: 12px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+}
+
+.session-list-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.session-list-item:last-child {
+  border-bottom: none;
+}
+
+.session-list-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.session-list-item-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vscode-sideBarTitle-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-list-item-date {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.session-list-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.session-list-action {
+  font-size: 11px;
+  padding: 2px 8px;
+}

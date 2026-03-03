@@ -38,7 +38,7 @@ export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'setMode', mode: Mode }
   | { method: 'setSources', sources: Source[] }
   | { method: 'setActions', actions: ActionInContext[], sources: Source[] }
-  | { method: 'setStepState', stepState: StepState }
+  | { method: 'setStepState', stepState: StepState, stepBodies?: string[] }
   | { method: 'elementPicked', elementInfo: ElementInfo, userGesture?: boolean }
 );
 
@@ -239,6 +239,19 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
             this.emit('modeChanged', { mode });
           }
           break;
+        case 'loadSession': {
+          const { sources: loadSources, stepState: loadStepState, stepBodies: loadStepBodies } = params;
+          if (!loadSources || !Array.isArray(loadSources) || !loadStepState)
+            break;
+          this._recordedActions = [];
+          this._sources = loadSources.map((s: Source) => ({ ...s, isRecorded: true }));
+          const primarySource = this._sources[0];
+          if (primarySource?.text)
+            this._updateCode(primarySource.text);
+          this.setSources(this._sources);
+          this._sendMessage({ type: 'recorder', method: 'setStepState', stepState: loadStepState, stepBodies: loadStepBodies });
+          break;
+        }
       }
 
       this.emit('event', { event, params });

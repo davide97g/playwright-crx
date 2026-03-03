@@ -108,7 +108,7 @@ declare global {
     playwrightUpdateLogs: (callLogs: CallLog[]) => void;
     playwrightSetRunningFile: (file: string | undefined) => void;
     playwrightElementPicked: (elementInfo: ElementInfo, userGesture?: boolean) => void;
-    playwrightSetStepState?: (stepState: { currentStepIndex: number; stepDescriptions: string[] }) => void;
+    playwrightSetStepState?: (stepState: { currentStepIndex: number; stepDescriptions: string[] }, stepBodies?: string[]) => void;
     playwrightSourcesEchoForTest: Source[];
     dispatch(data: any): Promise<void>;
   }
