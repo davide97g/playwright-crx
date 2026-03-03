@@ -113,8 +113,8 @@ You can give it a try with `bitreq/examples/todomvc-crx`.
 To build `bitreq`:
 
 ```bash
-npm ci
-npm run build
+bun install
+bun run build
 ```
 
 ## Updating Playwright
