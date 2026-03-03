@@ -15,8 +15,8 @@
  */
 
 import type { Mode } from '@recorder/recorderTypes';
-import type { CrxApplication } from 'playwright-crx';
-import playwright, { crx, _debug, _setUnderTest, _isUnderTest as isUnderTest } from 'playwright-crx';
+import type { CrxApplication } from 'bitreq';
+import playwright, { crx, _debug, _setUnderTest, _isUnderTest as isUnderTest } from 'bitreq';
 import type { CrxSettings } from './settings';
 import { addSettingsChangedListener, defaultSettings, loadSettings } from './settings';
 

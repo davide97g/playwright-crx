@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { crx } from 'playwright-crx';
+import { crx } from 'bitreq';
 import { createTodos } from './todos';
 
 chrome.action.onClicked.addListener(async ({ id: tabId }) => {

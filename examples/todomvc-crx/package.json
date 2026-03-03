@@ -9,7 +9,7 @@
     "build": "tsc && vite build"
   },
   "dependencies": {
-    "playwright-crx": "0.15.0"
+    "bitreq": "0.15.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.281",

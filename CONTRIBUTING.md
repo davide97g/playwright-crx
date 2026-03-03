@@ -2,9 +2,9 @@
 
 ## Tests
 
-We use playwright to test playwright-crx.
+We use playwright to test bitreq.
 
-The `context` fixture is extended to load a `playwright-crx` extension (e.g., recorder-crx or test-entension)
+The `context` fixture is extended to load a `bitreq` extension (e.g., recorder-crx or test-entension)
 
 ### Run tests in extension service worker
 

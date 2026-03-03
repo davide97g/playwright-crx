@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import type { CrxApplication } from 'playwright-crx/test';
-import { crx, expect, _debug } from 'playwright-crx/test';
+import type { CrxApplication } from 'bitreq/test';
+import { crx, expect, _debug } from 'bitreq/test';
 
 let _crxAppPromise: Promise<CrxApplication> | undefined;
 

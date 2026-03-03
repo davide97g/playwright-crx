@@ -1,4 +1,4 @@
-# Playwright CRX
+# Bitreq
 
 This package contains the [Chrome Extensions](https://developer.chrome.com/docs/extensions/) flavor of the [Playwright](http://github.com/microsoft/playwright) library.
 
@@ -8,7 +8,7 @@ For that, it relies on [`chrome.debugger`](https://developer.chrome.com/docs/ext
 
 ## Recorder / Player
 
-**Note:** This extension is available in [Chrome Web Store](https://chrome.google.com/webstore/detail/playwright-crx/jambeljnbnfbkcpnoiaedcabbgmnnlcd).
+**Note:** This extension is available in [Chrome Web Store](https://chrome.google.com/webstore/detail/bitreq/jambeljnbnfbkcpnoiaedcabbgmnnlcd).
 
 A small demo of Playwright CRX recorder and player in action:
 
@@ -36,15 +36,15 @@ In terms of chrome extension functionality, it provides:
 
 ## API
 
-It's possible to use `playwright-crx` as a library to create new chrome extensions.
+It's possible to use `bitreq` as a library to create new chrome extensions.
 
-Here's a simple example of a background service worker for a chrome extension using **playwright-crx**:
+Here's a simple example of a background service worker for a chrome extension using **bitreq**:
 
 ```ts
-import { crx, expect } from 'playwright-crx/test';
+import { crx, expect } from 'bitreq/test';
 
-// if you don't need assertions, you can reduce the bundle size by importing crx from playwright-crx
-// import { crx } from 'playwright-crx';
+// if you don't need assertions, you can reduce the bundle size by importing crx from bitreq
+// import { crx } from 'bitreq';
 
 chrome.action.onClicked.addListener(async ({ id: tabId }) => {
   const crxApp = await crx.start({ slowMo: 500 });
@@ -106,11 +106,11 @@ await filechooser.setFiles({
 });
 ```
 
-You can give it a try with `playwright-crx/examples/todomvc-crx`.
+You can give it a try with `bitreq/examples/todomvc-crx`.
 
 ## Build
 
-To build `playwright-crx`:
+To build `bitreq`:
 
 ```bash
 npm ci

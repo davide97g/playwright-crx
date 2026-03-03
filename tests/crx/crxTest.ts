@@ -19,8 +19,8 @@ import { test as base, chromium } from '@playwright/test';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { CrxFs, Crx, CrxApplication, BrowserContext as CrxBrowserContext, Page as CrxPage } from 'playwright-crx';
-import type * as CrxTests from 'playwright-crx/test';
+import type { CrxFs, Crx, CrxApplication, BrowserContext as CrxBrowserContext, Page as CrxPage } from 'bitreq';
+import type * as CrxTests from 'bitreq/test';
 import { rimraf } from 'rimraf';
 import { parseTraceRaw } from './utils';
 
@@ -93,7 +93,7 @@ export const test = base.extend<CrxFixtureOptions & {
         createUserDataDir: async ({}, run) => {
           const dirs: string[] = [];
           await run(() => {
-            const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'playwright-crx-test-'));
+            const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitreq-test-'));
             dirs.push(dir);
             return dir;
           });
@@ -108,7 +108,7 @@ export const test = base.extend<CrxFixtureOptions & {
               `--load-extension=${extensionPath}`,
             ],
           });
-          // prevents playwright from handling alerts, prompts, etc., and leave it to playwright-crx
+          // prevents playwright from handling alerts, prompts, etc., and leave it to bitreq
           // see: https://playwright.dev/docs/dialogs#alert-confirm-prompt-dialogs
           context.on('dialog', () => {});
           await use(context);
