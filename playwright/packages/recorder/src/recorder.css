@@ -109,3 +109,106 @@ body.dark-mode .recorder .toolbar-button.toggled.circle-large-filled {
   align-items: center;
   flex-wrap: wrap;
 }
+
+/* View toggle (Code | Test case) */
+.recorder-view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.recorder-view-toggle span {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  margin-right: 4px;
+}
+
+.recorder-view-toggle .toolbar-button {
+  font-size: 12px;
+  padding: 4px 10px;
+  min-height: 24px;
+}
+
+/* Test case view: sectioned plain text */
+.test-case-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  gap: 16px;
+}
+
+.test-case-section {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--vscode-editor-background);
+  flex-shrink: 0;
+}
+
+.test-case-section-header {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 12px;
+  background: var(--vscode-editor-inactiveSelectionBackground);
+  color: var(--vscode-sideBarTitle-foreground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.test-case-section-body {
+  min-height: 80px;
+}
+
+.test-case-section-textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 10px 12px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+  color: var(--vscode-editor-foreground);
+  background: var(--vscode-editor-background);
+  border: none;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.test-case-section-textarea::placeholder {
+  color: var(--vscode-input-placeholderForeground);
+}
+
+.test-case-section-textarea:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.test-case-section-code {
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.test-case-section-code-label {
+  font-size: 11px;
+  padding: 6px 12px;
+  background: var(--vscode-editor-inactiveSelectionBackground);
+  color: var(--vscode-descriptionForeground);
+}
+
+.test-case-add-step {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  border: 1px dashed var(--vscode-panel-border);
+  border-radius: 6px;
+  background: var(--vscode-editor-inactiveSelectionBackground);
+  flex-shrink: 0;
+}
+
+.test-case-add-step-input {
+  flex: 1;
+  min-width: 120px;
+  font-size: 13px;
+  padding: 8px 10px;
+  min-height: 32px;
+}

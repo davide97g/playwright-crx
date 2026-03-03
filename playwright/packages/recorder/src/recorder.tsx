@@ -24,12 +24,15 @@ import { emptySource, SourceChooser } from '@web/components/sourceChooser';
 import { ToolbarButton, ToolbarSeparator } from '@web/components/toolbarButton';
 import * as React from 'react';
 import { CallLogView } from './callLog';
+import { TestCaseView } from './testCaseView';
 import './recorder.css';
 import { asLocator } from '@isomorphic/locatorGenerators';
 import { toggleTheme } from '@web/theme';
 import { copy, useSetting } from '@web/uiUtils';
 import yaml from 'yaml';
 import { parseAriaSnapshot } from '@isomorphic/ariaSnapshot';
+
+export type RecorderViewMode = 'code' | 'testCase';
 
 export interface RecorderProps {
   sources: Source[],
@@ -57,6 +60,8 @@ export const Recorder: React.FC<RecorderProps> = ({
   const [stepState, setStepState] = React.useState<{ currentStepIndex: number; stepDescriptions: string[] } | null>(null);
   const [nextStepDescription, setNextStepDescription] = React.useState('');
   const [viewingStepIndex, setViewingStepIndex] = React.useState(0);
+  const [viewMode, setViewMode] = React.useState<RecorderViewMode>('code');
+  const [stepBodies, setStepBodies] = React.useState<string[]>(['']);
 
   React.useEffect(() => {
     window.playwrightSetStepState = (state: { currentStepIndex: number; stepDescriptions: string[] }) => setStepState(state);
@@ -69,6 +74,15 @@ export const Recorder: React.FC<RecorderProps> = ({
     if (stepState)
       setViewingStepIndex(stepState.currentStepIndex);
   }, [stepState?.currentStepIndex]);
+
+  React.useEffect(() => {
+    if (!stepState) return;
+    const count = Math.max(1, stepState.stepDescriptions.length);
+    setStepBodies(prev => {
+      if (prev.length >= count) return prev.slice(0, count);
+      return [...prev, ...Array(count - prev.length).fill('')];
+    });
+  }, [stepState?.stepDescriptions?.length]);
 
   const fileId = selectedFileId || runningFileId || sources[0]?.id;
   const isRecording = ['recording', 'recording-inspecting', 'assertingText', 'assertingVisibility', 'assertingValue', 'assertingSnapshot'].includes(mode);
@@ -100,6 +114,21 @@ export const Recorder: React.FC<RecorderProps> = ({
   const stepCount = Math.max(1, stepState?.stepDescriptions?.length ?? 1);
   const stepRevealLine = viewingStepIndex >= 0 && viewingStepIndex < stepLineNumbers.length ? stepLineNumbers[viewingStepIndex] : undefined;
   const codeRevealLine = stepRevealLine ?? source?.revealLine;
+
+  const stepCodeBlocks = React.useMemo(() => {
+    const text = source?.text ?? '';
+    const parts = text.split(/\r?\n/);
+    const blocks: string[] = [];
+    for (let i = 0; i < stepLineNumbers.length; i++) {
+      const startIdx = stepLineNumbers[i] - 1;
+      const endIdx = stepLineNumbers[i + 1] !== undefined ? stepLineNumbers[i + 1] - 1 : parts.length;
+      blocks.push(parts.slice(startIdx, endIdx).join('\n'));
+    }
+    if (blocks.length === 0 && text.trim().length > 0)
+      blocks.push(text);
+    return blocks;
+  }, [source?.text, stepLineNumbers]);
+
   const codeHighlight = React.useMemo(() => {
     const base = source?.highlight ?? [];
     if (stepRevealLine == null)
@@ -227,19 +256,53 @@ export const Recorder: React.FC<RecorderProps> = ({
         window.dispatch({ event: 'step' });
       }}></ToolbarButton>
       <div style={{ flex: 'auto' }}></div>
+      <div className='recorder-view-toggle'>
+        <span>View:</span>
+        <button
+          type='button'
+          className={'toolbar-button' + (viewMode === 'code' ? ' toggled' : '')}
+          title='Code view'
+          onClick={() => setViewMode('code')}
+        >Code</button>
+        <button
+          type='button'
+          className={'toolbar-button' + (viewMode === 'testCase' ? ' toggled' : '')}
+          title='Test case view'
+          onClick={() => setViewMode('testCase')}
+        >Test case</button>
+      </div>
       <div>Target:</div>
       <SourceChooser fileId={fileId} sources={sources} setFileId={fileId => {
         setSelectedFileId(fileId);
         window.dispatch({ event: 'fileChanged', params: { file: fileId } });
       }} />
       <ToolbarButton icon='clear-all' title='Clear' disabled={!source || !source.text} onClick={() => {
+        setStepBodies(['']);
         window.dispatch({ event: 'clear' });
       }}></ToolbarButton>
       <ToolbarButton icon='color-mode' title='Toggle color mode' toggled={false} onClick={() => toggleTheme()}></ToolbarButton>
     </Toolbar>
     <SplitView
       sidebarSize={200}
-      main={<CodeMirrorWrapper text={source.text} language={source.language} highlight={codeHighlight} revealLine={codeRevealLine} readOnly={source.id !== 'playwright-test'} onChange={onEditedCode} onCursorActivity={onCursorActivity} lineNumbers={true} />}
+      main={viewMode === 'testCase'
+        ? <TestCaseView
+            stepState={stepState}
+            stepCodeBlocks={stepCodeBlocks}
+            stepBodies={stepBodies}
+            onStepBodyChange={(stepIndex, text) => setStepBodies(prev => {
+              const next = [...prev];
+              next[stepIndex] = text;
+              return next;
+            })}
+            onAddStep={description => {
+              window.dispatch({ event: 'advanceStep', params: { description } }).catch(() => {});
+              setNextStepDescription('');
+            }}
+            nextStepDescription={nextStepDescription}
+            onNextStepDescriptionChange={setNextStepDescription}
+            isRecording={isRecording}
+          />
+        : <CodeMirrorWrapper text={source.text} language={source.language} highlight={codeHighlight} revealLine={codeRevealLine} readOnly={source.id !== 'playwright-test'} onChange={onEditedCode} onCursorActivity={onCursorActivity} lineNumbers={true} />}
       sidebar={<div className='recorder-sidebar' style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
         <TabbedPane
           rightToolbar={selectedTab === 'locator' || selectedTab === 'aria' ? [<ToolbarButton key={1} icon='files' title='Copy' onClick={() => copy((selectedTab === 'locator' ? locator : ariaSnapshot) || '')} />] : []}
