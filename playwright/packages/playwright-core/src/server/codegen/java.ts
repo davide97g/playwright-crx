@@ -46,6 +46,10 @@ export class JavaLanguageGenerator implements LanguageGenerator {
     this._mode = mode;
   }
 
+  generateStepComment(stepIndex: number, description: string): string {
+    return `// STEP ${stepIndex + 1}: ${description}`;
+  }
+
   generateAction(actionInContext: actions.ActionInContext): string {
     const action = actionInContext.action;
     const pageAlias = actionInContext.frame.pageAlias;

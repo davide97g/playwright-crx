@@ -16,7 +16,7 @@
 
 import { EventEmitter } from 'events';
 
-import { RecorderCollection } from './recorderCollection';
+import { RecorderCollection, type StepState } from './recorderCollection';
 import * as rawRecorderSource from '../../generated/pollingRecorderSource';
 import { eventsHelper, monotonicTime, quoteCSSAttributeValue  } from '../../utils';
 import { raceAgainstDeadline } from '../../utils/isomorphic/timeoutRunner';
@@ -68,6 +68,7 @@ export class ContextRecorder extends EventEmitter {
     
     this._collection = new RecorderCollection(this._pageAliases);
     this._collection.on('change', (actions: actions.ActionInContext[]) => {
+      const stepState = this._collection.getStepState();
       const languageGeneratorOptions: LanguageGeneratorOptions = {
         browserName: context._browser.options.name,
         launchOptions: { headless: false, ...params.launchOptions, tracesDir: undefined },
@@ -78,7 +79,7 @@ export class ContextRecorder extends EventEmitter {
 
       this._recorderSources = [];
       for (const languageGenerator of this._orderedLanguages) {
-        const { header, footer, actionTexts, text } = generateCode(actions, languageGenerator, languageGeneratorOptions);
+        const { header, footer, actionTexts, text } = generateCode(actions, languageGenerator, languageGeneratorOptions, stepState);
         const source: Source = {
           isRecorded: true,
           label: languageGenerator.name,
@@ -98,7 +99,8 @@ export class ContextRecorder extends EventEmitter {
       }
       this.emit(ContextRecorder.Events.Change, {
         sources: this._recorderSources,
-        actions
+        actions,
+        stepState,
       });
     });
     context.on(BrowserContext.Events.BeforeClose, () => {
@@ -195,6 +197,10 @@ export class ContextRecorder extends EventEmitter {
         startTime: monotonicTime()
       });
     }
+  }
+
+  advanceStep(description: string): void {
+    this._collection.advanceStep(description);
   }
 
   clearScript(): void {

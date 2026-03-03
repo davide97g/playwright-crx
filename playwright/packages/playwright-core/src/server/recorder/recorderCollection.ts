@@ -26,23 +26,47 @@ import type { Frame } from '../frames';
 import type { Page } from '../page';
 import type * as actions from '@recorder/actions';
 
+export type StepState = {
+  stepDescriptions: string[];
+  currentStepIndex: number;
+};
+
 export class RecorderCollection extends EventEmitter {
   private _actions: actions.ActionInContext[] = [];
   private _enabled = false;
   private _pageAliases: Map<Page, string>;
+  private _stepDescriptions: string[] = ['Start'];
+  private _currentStepIndex = 0;
 
   constructor(pageAliases: Map<Page, string>) {
     super();
     this._pageAliases = pageAliases;
   }
 
+  getStepState(): StepState {
+    return {
+      stepDescriptions: [...this._stepDescriptions],
+      currentStepIndex: this._currentStepIndex,
+    };
+  }
+
+  advanceStep(description: string) {
+    this._currentStepIndex++;
+    this._stepDescriptions.push(description);
+    this._fireChange();
+  }
+
   restart() {
     this._actions = [];
+    this._stepDescriptions = ['Start'];
+    this._currentStepIndex = 0;
     this.emit('change', []);
   }
 
   loadActions(actions: actions.ActionInContext[]) {
     this._actions = Array.from(actions);
+    this._stepDescriptions = ['Start'];
+    this._currentStepIndex = 0;
   }
 
   setEnabled(enabled: boolean) {
@@ -57,6 +81,7 @@ export class RecorderCollection extends EventEmitter {
 
   addRecordedAction(actionInContext: actions.ActionInContext) {
     if (['openPage', 'closePage'].includes(actionInContext.action.name)) {
+      actionInContext.stepIndex = this._currentStepIndex;
       this._actions.push(actionInContext);
       this._fireChange();
       return;
@@ -68,11 +93,13 @@ export class RecorderCollection extends EventEmitter {
     if (!this._enabled)
       return;
     if (actionInContext.action.name === 'openPage' || actionInContext.action.name === 'closePage') {
+      actionInContext.stepIndex = this._currentStepIndex;
       this._actions.push(actionInContext);
       this._fireChange();
       return;
     }
 
+    actionInContext.stepIndex = this._currentStepIndex;
     this._actions.push(actionInContext);
     this._fireChange();
     await callback?.().catch();

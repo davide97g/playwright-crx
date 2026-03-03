@@ -57,3 +57,55 @@ body.dark-mode .recorder .toolbar-button.toggled.circle-large-filled {
 .recorder .selector-input {
   flex: auto;
 }
+
+/* Step section: larger, clearer */
+.recorder-step-section {
+  padding: 12px;
+  border-top: 1px solid var(--vscode-panel-border);
+  flex-shrink: 0;
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--vscode-editor-inactiveSelectionBackground);
+}
+
+.recorder-step-section .step-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vscode-sideBarTitle-foreground);
+}
+
+.recorder-step-section .step-nav-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.recorder-step-section .step-nav-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.recorder-step-section .step-nav-buttons button,
+.recorder-step-section .step-add-row button {
+  font-size: 12px;
+  padding: 6px 12px;
+  min-height: 28px;
+}
+
+.recorder-step-section input {
+  font-size: 13px;
+  padding: 8px 10px;
+  min-height: 32px;
+  flex: 1;
+  min-width: 120px;
+}
+
+.recorder-step-section .step-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}

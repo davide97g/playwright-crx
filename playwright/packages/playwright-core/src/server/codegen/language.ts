@@ -19,13 +19,39 @@ import type * as types from '../types';
 import type { LanguageGenerator, LanguageGeneratorOptions } from './types';
 import type * as actions from '@recorder/actions';
 
-export function generateCode(actions: actions.ActionInContext[], languageGenerator: LanguageGenerator, options: LanguageGeneratorOptions) {
+export type StepState = {
+  stepDescriptions: string[];
+  currentStepIndex: number;
+};
+
+export function generateCode(actions: actions.ActionInContext[], languageGenerator: LanguageGenerator, options: LanguageGeneratorOptions, stepState?: StepState) {
   let includeContext = false;
   if (actions.some(a => a.action.name === 'openPage' && a.frame.pageAlias !== 'page'))
     includeContext = true;
   const header = languageGenerator.generateHeader(options, includeContext);
   const footer = languageGenerator.generateFooter(options.saveStorage);
-  const actionTexts = actions.map(a => languageGenerator.generateAction(a)).filter(Boolean);
+  let actionTexts: string[];
+  if (stepState && languageGenerator.generateStepsDocument) {
+    const stepsDoc = languageGenerator.generateStepsDocument(actions, stepState);
+    actionTexts = [stepsDoc];
+  } else {
+    actionTexts = [];
+    let lastStepIndex: number | undefined;
+    const generateStepComment = languageGenerator.generateStepComment?.bind(languageGenerator);
+    for (const a of actions) {
+      const stepIndex = a.stepIndex ?? 0;
+      if (stepState && generateStepComment && stepIndex !== lastStepIndex) {
+        const description = stepState.stepDescriptions[stepIndex] ?? 'Start';
+        const comment = generateStepComment(stepIndex, description);
+        if (comment)
+          actionTexts.push(comment);
+        lastStepIndex = stepIndex;
+      }
+      const line = languageGenerator.generateAction(a);
+      if (line)
+        actionTexts.push(line);
+    }
+  }
   const text = [header, ...actionTexts, footer].join('\n');
   return { header, footer, actionTexts, text };
 }

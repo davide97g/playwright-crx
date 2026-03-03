@@ -29,6 +29,8 @@ import type { Crx } from '../crx';
 import type { LanguageGeneratorOptions } from 'playwright-core/lib/server/codegen/types';
 import { serverSideCallMetadata } from 'playwright-core/lib/server';
 
+export type StepState = { currentStepIndex: number; stepDescriptions: string[] };
+
 export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'resetCallLogs' }
   | { method: 'updateCallLogs', callLogs: CallLog[] }
@@ -36,6 +38,7 @@ export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'setMode', mode: Mode }
   | { method: 'setSources', sources: Source[] }
   | { method: 'setActions', actions: ActionInContext[], sources: Source[] }
+  | { method: 'setStepState', stepState: StepState }
   | { method: 'elementPicked', elementInfo: ElementInfo, userGesture?: boolean }
 );
 
@@ -174,6 +177,10 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     this._sources = Array.from(sources);
     if (this._recorder._isRecording())
       this._updateCode(null);
+  }
+
+  async setStepState(stepState: StepState) {
+    this._sendMessage({ type: 'recorder', method: 'setStepState', stepState });
   }
 
   private _updateCode(code: string | null) {

@@ -164,6 +164,13 @@ export class RecorderApp extends EventEmitter implements IRecorderApp {
   async setActions(actions: actions.ActionInContext[], sources: Source[]): Promise<void> {
   }
 
+  async setStepState(stepState: { currentStepIndex: number; stepDescriptions: string[] }): Promise<void> {
+    await this._page.mainFrame().evaluateExpression(((stepState: { currentStepIndex: number; stepDescriptions: string[] }) => {
+      if (typeof window.playwrightSetStepState === 'function')
+        window.playwrightSetStepState(stepState);
+    }).toString(), { isFunction: true }, stepState).catch(() => {});
+  }
+
   async elementPicked(elementInfo: ElementInfo, userGesture?: boolean): Promise<void> {
     if (userGesture)
       this._page.bringToFront();

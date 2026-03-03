@@ -133,6 +133,10 @@ export class Recorder implements InstrumentationListener, IRecorder {
         this._contextRecorder.clearScript();
         return;
       }
+      if (data.event === 'advanceStep') {
+        this._contextRecorder.advanceStep(data.params?.description ?? 'Step');
+        return;
+      }
       if (data.event === 'runTask') {
         this._contextRecorder.runTask(data.params.task);
         return;
@@ -151,9 +155,11 @@ export class Recorder implements InstrumentationListener, IRecorder {
       this._recorderApp?.close().catch(() => {});
     });
 
-    this._contextRecorder.on(ContextRecorder.Events.Change, (data: { sources: Source[], actions: actions.ActionInContext[] }) => {
+    this._contextRecorder.on(ContextRecorder.Events.Change, (data: { sources: Source[], actions: actions.ActionInContext[], stepState?: { stepDescriptions: string[], currentStepIndex: number } }) => {
       this._recorderSources = data.sources;
       recorderApp.setActions(data.actions, data.sources);
+      if (data.stepState)
+        recorderApp.setStepState?.(data.stepState);
       recorderApp.setRunningFile(undefined);
       this._pushAllSources();
     });

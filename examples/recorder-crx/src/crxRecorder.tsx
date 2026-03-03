@@ -98,6 +98,11 @@ export const CrxRecorder: React.FC = ({
           return newLog;
         }); break;
         case 'setRunningFile': setRunningFileId(msg.file); break;
+        case 'setStepState': {
+          if (typeof window.playwrightSetStepState === 'function')
+            window.playwrightSetStepState(msg.stepState);
+          break;
+        }
         case 'elementPicked': setElementPicked(msg.elementInfo, msg.userGesture); break;
       }
     };

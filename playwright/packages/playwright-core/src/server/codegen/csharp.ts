@@ -47,6 +47,10 @@ export class CSharpLanguageGenerator implements LanguageGenerator {
     this._mode = mode;
   }
 
+  generateStepComment(stepIndex: number, description: string): string {
+    return `// STEP ${stepIndex + 1}: ${description}`;
+  }
+
   generateAction(actionInContext: actions.ActionInContext): string {
     const action = this._generateActionInner(actionInContext);
     if (action)

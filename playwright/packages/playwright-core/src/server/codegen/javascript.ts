@@ -35,6 +35,10 @@ export class JavaScriptLanguageGenerator implements LanguageGenerator {
     this._isTest = isTest;
   }
 
+  generateStepComment(stepIndex: number, description: string): string {
+    return `// STEP ${stepIndex + 1}: ${description}`;
+  }
+
   generateAction(actionInContext: actions.ActionInContext): string {
     const action = actionInContext.action;
     if (this._isTest && actionInContext.frame.pageAlias === 'page' && (action.name === 'openPage' || action.name === 'closePage'))

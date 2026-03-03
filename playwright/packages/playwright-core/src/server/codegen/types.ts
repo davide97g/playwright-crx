@@ -35,4 +35,6 @@ export interface LanguageGenerator {
   generateHeader(options: LanguageGeneratorOptions, includeContext?: boolean): string;
   generateAction(actionInContext: actions.ActionInContext): string;
   generateFooter(saveStorage: string | undefined): string;
+  generateStepComment?(stepIndex: number, description: string): string;
+  generateStepsDocument?(actions: actions.ActionInContext[], stepState: { stepDescriptions: string[] }): string;
 }

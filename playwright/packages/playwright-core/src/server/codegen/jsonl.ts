@@ -35,6 +35,38 @@ export class JsonlLanguageGenerator implements LanguageGenerator {
     return JSON.stringify(entry);
   }
 
+  generateStepsDocument(actions: actions.ActionInContext[], stepState: { stepDescriptions: string[] }): string {
+    const steps: { name: string; actions: object[] }[] = [];
+    let currentStepIndex: number | undefined;
+    let currentActions: object[] = [];
+    for (const a of actions) {
+      const stepIndex = a.stepIndex ?? 0;
+      if (stepIndex !== currentStepIndex) {
+        if (currentActions.length > 0 && currentStepIndex !== undefined) {
+          steps.push({
+            name: stepState.stepDescriptions[currentStepIndex] ?? 'Start',
+            actions: currentActions,
+          });
+          currentActions = [];
+        }
+        currentStepIndex = stepIndex;
+      }
+      const locator = (a.action as any).selector ? JSON.parse(asLocator('jsonl', (a.action as any).selector)) : undefined;
+      currentActions.push({
+        ...a.action,
+        ...a.frame,
+        locator,
+      });
+    }
+    if (currentActions.length > 0 && currentStepIndex !== undefined) {
+      steps.push({
+        name: stepState.stepDescriptions[currentStepIndex] ?? 'Start',
+        actions: currentActions,
+      });
+    }
+    return JSON.stringify({ steps }, null, 2);
+  }
+
   generateHeader(options: LanguageGeneratorOptions): string {
     return JSON.stringify(options);
   }

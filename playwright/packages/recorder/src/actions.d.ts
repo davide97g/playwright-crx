@@ -161,4 +161,5 @@ export type ActionInContext = {
   action: Action;
   startTime: number;
   endTime?: number;
+  stepIndex?: number;
 };

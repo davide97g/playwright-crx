@@ -42,6 +42,10 @@ export class PythonLanguageGenerator implements LanguageGenerator {
     this._asyncPrefix = isAsync ? 'async ' : '';
   }
 
+  generateStepComment(stepIndex: number, description: string): string {
+    return `# STEP ${stepIndex + 1}: ${description}`;
+  }
+
   generateAction(actionInContext: actions.ActionInContext): string {
     const action = actionInContext.action;
     if (this._isPyTest && (action.name === 'openPage' || action.name === 'closePage'))

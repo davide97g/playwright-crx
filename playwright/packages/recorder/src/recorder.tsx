@@ -54,8 +54,25 @@ export const Recorder: React.FC<RecorderProps> = ({
   const [ariaSnapshot, setAriaSnapshot] = React.useState<string | undefined>();
   const [ariaSnapshotErrors, setAriaSnapshotErrors] = React.useState<SourceHighlight[]>();
   const [selectorFocusOnChange, setSelectorFocusOnChange] = React.useState<boolean | undefined>(true);
+  const [stepState, setStepState] = React.useState<{ currentStepIndex: number; stepDescriptions: string[] } | null>(null);
+  const [nextStepDescription, setNextStepDescription] = React.useState('');
+  const [viewingStepIndex, setViewingStepIndex] = React.useState(0);
+
+  React.useEffect(() => {
+    window.playwrightSetStepState = (state: { currentStepIndex: number; stepDescriptions: string[] }) => setStepState(state);
+    return () => {
+      window.playwrightSetStepState = undefined;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (stepState)
+      setViewingStepIndex(stepState.currentStepIndex);
+  }, [stepState?.currentStepIndex]);
 
   const fileId = selectedFileId || runningFileId || sources[0]?.id;
+  const isRecording = ['recording', 'recording-inspecting', 'assertingText', 'assertingVisibility', 'assertingValue', 'assertingSnapshot'].includes(mode);
+  const currentStepLabel = stepState ? (stepState.stepDescriptions[stepState.currentStepIndex] ?? 'Start') : 'Start';
 
   const source = React.useMemo(() => {
     if (fileId) {
@@ -65,6 +82,30 @@ export const Recorder: React.FC<RecorderProps> = ({
     }
     return emptySource();
   }, [sources, fileId]);
+
+  const stepLineNumbers = React.useMemo(() => {
+    const lines: number[] = [];
+    const text = source?.text ?? '';
+    const parts = text.split('\n');
+    for (let i = 0; i < parts.length; i++) {
+      if (/^\s*(\/\/|#)\s*STEP\s+\d+:/.test(parts[i])) {
+        lines.push(i + 1);
+      }
+    }
+    if (lines.length === 0 && text.trim().length > 0)
+      lines.push(1);
+    return lines;
+  }, [source?.text]);
+
+  const stepCount = Math.max(1, stepState?.stepDescriptions?.length ?? 1);
+  const stepRevealLine = viewingStepIndex >= 0 && viewingStepIndex < stepLineNumbers.length ? stepLineNumbers[viewingStepIndex] : undefined;
+  const codeRevealLine = stepRevealLine ?? source?.revealLine;
+  const codeHighlight = React.useMemo(() => {
+    const base = source?.highlight ?? [];
+    if (stepRevealLine == null)
+      return base;
+    return [...base, { line: stepRevealLine, type: 'running' as const, message: 'Step' }];
+  }, [source?.highlight, stepRevealLine]);
 
   const [locator, setLocator] = React.useState('');
   window.playwrightElementPicked = (elementInfo: ElementInfo, userGesture?: boolean) => {
@@ -198,29 +239,72 @@ export const Recorder: React.FC<RecorderProps> = ({
     </Toolbar>
     <SplitView
       sidebarSize={200}
-      main={<CodeMirrorWrapper text={source.text} language={source.language} highlight={source.highlight} revealLine={source.revealLine} readOnly={source.id !== 'playwright-test'} onChange={onEditedCode} onCursorActivity={onCursorActivity} lineNumbers={true} />}
-      sidebar={<TabbedPane
-        rightToolbar={selectedTab === 'locator' || selectedTab === 'aria' ? [<ToolbarButton key={1} icon='files' title='Copy' onClick={() => copy((selectedTab === 'locator' ? locator : ariaSnapshot) || '')} />] : []}
-        tabs={[
-          {
-            id: 'locator',
-            title: 'Locator',
-            render: () => <CodeMirrorWrapper text={locator} placeholder='Type locator to inspect' language={source.language} focusOnChange={selectorFocusOnChange} onChange={onEditorChange} wrapLines={true} />
-          },
-          {
-            id: 'log',
-            title: 'Log',
-            render: () => <CallLogView language={source.language} log={Array.from(log.values())} />
-          },
-          {
-            id: 'aria',
-            title: 'Aria',
-            render: () => <CodeMirrorWrapper text={ariaSnapshot || ''} placeholder='Type aria template to match' language={'yaml'} onChange={onAriaEditorChange} highlight={ariaSnapshotErrors} wrapLines={true} />
-          },
-        ]}
-        selectedTab={selectedTab}
-        setSelectedTab={setSelectedTab}
-      />}
+      main={<CodeMirrorWrapper text={source.text} language={source.language} highlight={codeHighlight} revealLine={codeRevealLine} readOnly={source.id !== 'playwright-test'} onChange={onEditedCode} onCursorActivity={onCursorActivity} lineNumbers={true} />}
+      sidebar={<div className='recorder-sidebar' style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+        <TabbedPane
+          rightToolbar={selectedTab === 'locator' || selectedTab === 'aria' ? [<ToolbarButton key={1} icon='files' title='Copy' onClick={() => copy((selectedTab === 'locator' ? locator : ariaSnapshot) || '')} />] : []}
+          tabs={[
+            {
+              id: 'locator',
+              title: 'Locator',
+              render: () => <CodeMirrorWrapper text={locator} placeholder='Type locator to inspect' language={source.language} focusOnChange={selectorFocusOnChange} onChange={onEditorChange} wrapLines={true} />
+            },
+            {
+              id: 'log',
+              title: 'Log',
+              render: () => <CallLogView language={source.language} log={Array.from(log.values())} />
+            },
+            {
+              id: 'aria',
+              title: 'Aria',
+              render: () => <CodeMirrorWrapper text={ariaSnapshot || ''} placeholder='Type aria template to match' language={'yaml'} onChange={onAriaEditorChange} highlight={ariaSnapshotErrors} wrapLines={true} />
+            },
+          ]}
+          selectedTab={selectedTab}
+          setSelectedTab={setSelectedTab}
+        />
+        {isRecording && <div className='recorder-step-section'>
+          <div className='step-label'>Current step: {currentStepLabel}</div>
+          <div className='step-nav-row'>
+            <div className='step-nav-buttons'>
+              <button
+                className='toolbar-button'
+                type='button'
+                title='Go to previous step'
+                disabled={viewingStepIndex <= 0}
+                onClick={() => setViewingStepIndex(i => Math.max(0, i - 1))}
+              >Prev</button>
+              <button
+                className='toolbar-button'
+                type='button'
+                title='Go to next step'
+                disabled={viewingStepIndex >= stepCount - 1}
+                onClick={() => setViewingStepIndex(i => Math.min(stepCount - 1, i + 1))}
+              >Next</button>
+            </div>
+            <span style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground)' }}>
+              Step {viewingStepIndex + 1} of {stepCount}
+            </span>
+          </div>
+          <div className='step-add-row'>
+            <input
+              type='text'
+              placeholder='Next step description'
+              value={nextStepDescription}
+              onChange={e => setNextStepDescription(e.target.value)}
+            />
+            <button
+              className='toolbar-button'
+              type='button'
+              onClick={() => {
+                const description = nextStepDescription.trim() || `Step ${(stepState?.currentStepIndex ?? 0) + 2}`;
+                window.dispatch({ event: 'advanceStep', params: { description } }).catch(() => {});
+                setNextStepDescription('');
+              }}
+            >Add step</button>
+          </div>
+        </div>}
+      </div>}
     />
   </div>;
 };
