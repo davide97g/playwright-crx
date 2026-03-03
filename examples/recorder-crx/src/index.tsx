@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import './devChromeMock';
 import '@web/common.css';
 import { applyTheme } from '@web/theme';
 import '@web/third_party/vscode/codicon.css';
@@ -22,5 +23,8 @@ import { CrxRecorder } from './crxRecorder';
 
 (async () => {
   applyTheme();
-  ReactDOM.createRoot(document.querySelector('#root')!).render(<CrxRecorder />);
+  const root = document.querySelector('#root');
+  if (!root)
+    throw new Error('Root element #root not found');
+  ReactDOM.createRoot(root).render(<CrxRecorder />);
 })();

@@ -21,6 +21,8 @@ import sourcemaps from 'rollup-plugin-sourcemaps';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  // Sidebar UI does not use bitreq (only background does); exclude so dev server does not pre-bundle it
+  optimizeDeps: { exclude: ['bitreq'] },
   resolve: {
     alias: {
       '@isomorphic': path.resolve(__dirname, '../../playwright/packages/playwright-core/src/utils/isomorphic'),

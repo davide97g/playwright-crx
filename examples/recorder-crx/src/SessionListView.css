@@ -17,7 +17,7 @@
   padding: 8px 0;
   overflow-y: auto;
   flex: 1;
-  min-height: 0;
+  min-height: 280px;
 }
 
 .session-list-empty {
@@ -29,8 +29,8 @@
 .session-list-item {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px 12px;
+  gap: 8px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 
@@ -46,7 +46,7 @@
 }
 
 .session-list-item-name {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--vscode-sideBarTitle-foreground);
   overflow: hidden;
@@ -54,7 +54,7 @@
   white-space: nowrap;
 }
 
-.session-list-item-date {
+.session-list-item-meta {
   font-size: 11px;
   color: var(--vscode-descriptionForeground);
 }

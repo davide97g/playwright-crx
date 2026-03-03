@@ -34,7 +34,8 @@
     "clean": "bun run clean:pw && bun run clean:examples && bun run clean:tests && bun run clean:crx",
     "test:install": "cd ./tests && bunx playwright install --with-deps chromium",
     "test": "cd ./tests && bunx playwright test",
-    "test-ui": "cd ./tests && bunx playwright test --ui --timeout 0"
+    "test-ui": "cd ./tests && bunx playwright test --ui --timeout 0",
+    "dev:recorder": "bun run build:crx && cd examples/recorder-crx && bun run dev"
   },
   "workspaces": [
     "examples/recorder-crx",

@@ -38,6 +38,11 @@ function formatDate(ms: number): string {
   });
 }
 
+function stepCountLabel(session: PersistedSession): string {
+  const n = session.stepState?.stepDescriptions?.length ?? session.stepBodies?.length ?? 0;
+  return n === 1 ? '1 step' : `${n} steps`;
+}
+
 export const SessionListView: React.FC<SessionListViewProps> = ({
   sessions,
   onSaveCurrent,
@@ -75,8 +80,8 @@ export const SessionListView: React.FC<SessionListViewProps> = ({
                 <span className='session-list-item-name' title={session.name}>
                   {session.name}
                 </span>
-                <span className='session-list-item-date'>
-                  {formatDate(session.updatedAt)}
+                <span className='session-list-item-meta'>
+                  {formatDate(session.updatedAt)} · {stepCountLabel(session)}
                 </span>
               </div>
               <div className='session-list-item-actions'>

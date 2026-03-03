@@ -20,7 +20,7 @@ import { ToolbarButton, ToolbarSeparator } from '@web/components/toolbarButton';
 import { Dialog } from './dialog';
 import { PreferencesForm } from './preferencesForm';
 import type { CallLog, ElementInfo, Mode, Source } from '@recorder/recorderTypes';
-import type { RecorderHandle } from '@recorder/recorder';
+import type { RecorderHandle, SessionSnapshot } from '@recorder/recorder';
 import { Recorder } from '@recorder/recorder';
 import type { CrxSettings } from './settings';
 import type { PersistedSession } from './sessionsDb';
@@ -73,8 +73,26 @@ const codegenFilenames: Record<string, string> = {
   'csharp': 'Example.cs',
 };
 
-export const CrxRecorder: React.FC = ({
-}) => {
+type RecorderPortMessage = {
+  type: string;
+  method?: string;
+  paused?: boolean;
+  mode?: Mode;
+  sources?: Source[];
+  callLogs?: CallLog[];
+  file?: string;
+  stepState?: { currentStepIndex: number; stepDescriptions: string[] };
+  stepBodies?: string[];
+  elementInfo?: ElementInfo;
+  userGesture?: boolean;
+};
+
+type DispatchData = {
+  event: string;
+  params?: Record<string, unknown> & { file?: string };
+};
+
+export const CrxRecorder: React.FC = () => {
   const recorderRef = React.useRef<RecorderHandle>(null);
   const [settings, setSettings] = React.useState<CrxSettings>(defaultSettings);
   const [sources, setSources] = React.useState<Source[]>([]);
@@ -83,40 +101,58 @@ export const CrxRecorder: React.FC = ({
   const [mode, setMode] = React.useState<Mode>('none');
   const [selectedFileId, setSelectedFileId] = React.useState<string>(defaultSettings.targetLanguage);
   const [sessions, setSessions] = React.useState<PersistedSession[]>([]);
+  const [sessionTitle, setSessionTitle] = React.useState('');
+  const [currentSessionId, setCurrentSessionId] = React.useState<string | null>(null);
+  const [snapshotVersion, setSnapshotVersion] = React.useState(0);
 
   React.useEffect(() => {
     const port = chrome.runtime.connect({ name: 'recorder' });
-    const onMessage = (msg: any) => {
+    const onMessage = (msg: RecorderPortMessage) => {
       if (!('type' in msg) || msg.type !== 'recorder')
         return;
 
       switch (msg.method) {
-        case 'setPaused': setPaused(msg.paused); break;
-        case 'setMode': setMode(msg.mode); break;
-        case 'setSources': setSources(msg.sources); break;
+        case 'setPaused':
+          if (msg.paused !== undefined) setPaused(msg.paused);
+          break;
+        case 'setMode':
+          if (msg.mode !== undefined) setMode(msg.mode);
+          break;
+        case 'setSources':
+          if (msg.sources !== undefined) setSources(msg.sources);
+          break;
         case 'resetCallLogs': setLog(new Map()); break;
-        case 'updateCallLogs': setLog(log => {
-          const newLog = new Map<string, CallLog>(log);
-          for (const callLog of msg.callLogs) {
-            callLog.reveal = !log.has(callLog.id);
-            newLog.set(callLog.id, callLog);
-          }
-          return newLog;
-        }); break;
-        case 'setRunningFile': setRunningFileId(msg.file); break;
+        case 'updateCallLogs': {
+          const callLogs = msg.callLogs;
+          if (callLogs)
+            setLog(log => {
+              const newLog = new Map<string, CallLog>(log);
+              for (const callLog of callLogs) {
+                callLog.reveal = !log.has(callLog.id);
+                newLog.set(callLog.id, callLog);
+              }
+              return newLog;
+            });
+          break;
+        }
+        case 'setRunningFile':
+          if (msg.file !== undefined) setRunningFileId(msg.file);
+          break;
         case 'setStepState': {
-          if (typeof window.playwrightSetStepState === 'function')
+          if (typeof window.playwrightSetStepState === 'function' && msg.stepState)
             window.playwrightSetStepState(msg.stepState, msg.stepBodies);
           break;
         }
-        case 'elementPicked': setElementPicked(msg.elementInfo, msg.userGesture); break;
+        case 'elementPicked':
+          if (msg.elementInfo) setElementPicked(msg.elementInfo, msg.userGesture);
+          break;
       }
     };
     port.onMessage.addListener(onMessage);
 
-    window.dispatch = async (data: any) => {
+    window.dispatch = async (data: DispatchData) => {
       port.postMessage({ type: 'recorderEvent', ...data });
-      if (data.event === 'fileChanged')
+      if (data.event === 'fileChanged' && data.params?.file !== undefined)
         setSelectedFileId(data.params.file);
     };
     loadSettings().then(settings => {
@@ -143,19 +179,23 @@ export const CrxRecorder: React.FC = ({
     if (!snapshot || !sources.length)
       return;
     const now = Date.now();
+    const id = generateSessionId();
     const session: PersistedSession = {
-      id: generateSessionId(),
-      name: defaultSessionName(),
+      id,
+      name: sessionTitle.trim() || defaultSessionName(),
       createdAt: now,
       updatedAt: now,
       sources,
       stepState: snapshot.stepState ?? { currentStepIndex: 0, stepDescriptions: ['Start'] },
       stepBodies: snapshot.stepBodies.length ? snapshot.stepBodies : [''],
     };
+    setCurrentSessionId(id);
     saveSessionDb(session).then(refreshSessions).catch(() => {});
-  }, [sources, refreshSessions]);
+  }, [sources, sessionTitle, refreshSessions]);
 
   const handleLoadSession = React.useCallback((session: PersistedSession) => {
+    setCurrentSessionId(session.id);
+    setSessionTitle(session.name);
     window.dispatch({ event: 'loadSession', params: { sources: session.sources, stepState: session.stepState, stepBodies: session.stepBodies } });
   }, []);
 
@@ -238,7 +278,7 @@ export const CrxRecorder: React.FC = ({
     return () => {
       window.removeEventListener('keydown', keydownHandler);
     };
-  }, [selectedFileId, settings, saveCode]);
+  }, [settings, saveCode]);
 
   const dispatchEditedCode = React.useCallback((code: string) => {
     window.dispatch({ event: 'codeChanged', params: { code } });
@@ -247,6 +287,55 @@ export const CrxRecorder: React.FC = ({
   const dispatchCursorActivity = React.useCallback((position: { line: number }) => {
     window.dispatch({ event: 'cursorActivity', params: { position } });
   }, []);
+
+  const onSessionSnapshotChange = React.useCallback((_snapshot: SessionSnapshot) => {
+    setSnapshotVersion(v => v + 1);
+  }, []);
+
+  const performAutoSave = React.useCallback(async () => {
+    const snapshot = recorderRef.current?.getSessionSnapshot();
+    if (!snapshot || !sources.length)
+      return;
+    const now = Date.now();
+    const stepState = snapshot.stepState ?? { currentStepIndex: 0, stepDescriptions: ['Start'] };
+    const stepBodies = snapshot.stepBodies.length ? snapshot.stepBodies : [''];
+    const name = sessionTitle.trim() || defaultSessionName();
+
+    if (currentSessionId) {
+      const existing = await getSessionDb(currentSessionId);
+      if (existing) {
+        await saveSessionDb({
+          ...existing,
+          name,
+          updatedAt: now,
+          sources,
+          stepState,
+          stepBodies,
+        });
+        refreshSessions();
+        return;
+      }
+    }
+    const id = generateSessionId();
+    setCurrentSessionId(id);
+    await saveSessionDb({
+      id,
+      name,
+      createdAt: now,
+      updatedAt: now,
+      sources,
+      stepState,
+      stepBodies,
+    });
+    refreshSessions();
+  }, [sources, sessionTitle, currentSessionId, refreshSessions]);
+
+  // Re-run when session title, sources, or step snapshot change to reset debounce timer
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally include sessionTitle, sources, snapshotVersion
+  React.useEffect(() => {
+    const timeout = window.setTimeout(performAutoSave, 800);
+    return () => window.clearTimeout(timeout);
+  }, [sessionTitle, sources, snapshotVersion, performAutoSave]);
 
   return <>
     <ModalContainer />
@@ -259,7 +348,7 @@ export const CrxRecorder: React.FC = ({
           <div className='dropdown'>
             <ToolbarButton icon='tools' title='Tools' disabled={false} onClick={() => {}}></ToolbarButton>
             <div className='dropdown-content right-align'>
-              <a href='#' onClick={requestStorageState}>Download storage state</a>
+              <button type='button' className='dropdown-link' onClick={requestStorageState}>Download storage state</button>
             </div>
           </div>
           <ToolbarSeparator />
@@ -275,6 +364,9 @@ export const CrxRecorder: React.FC = ({
         onEditedCode={dispatchEditedCode}
         onCursorActivity={dispatchCursorActivity}
         sessionsTabContent={sessionsTabContent}
+        sessionTitle={sessionTitle}
+        onSessionTitleChange={setSessionTitle}
+        onSessionSnapshotChange={onSessionSnapshotChange}
       />
     </div>
   </>;

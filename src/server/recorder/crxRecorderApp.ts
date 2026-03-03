@@ -27,7 +27,6 @@ import { parse } from './parser';
 import { languageSet } from 'playwright-core/lib/server/codegen/languages';
 import type { Crx } from '../crx';
 import type { LanguageGeneratorOptions } from 'playwright-core/lib/server/codegen/types';
-import { serverSideCallMetadata } from 'playwright-core/lib/server';
 
 export type StepState = { currentStepIndex: number; stepDescriptions: string[] };
 
@@ -42,7 +41,17 @@ export type RecorderMessage = { type: 'recorder' } & (
   | { method: 'elementPicked', elementInfo: ElementInfo, userGesture?: boolean }
 );
 
-export type RecorderEventData =  (EventData | { event: 'resetCallLogs' | 'codeChanged' | 'cursorActivity', params: any }) & { type: string };
+export type LoadSessionParams = {
+  sources?: Source[];
+  stepState?: StepState;
+  stepBodies?: string[];
+};
+
+export type RecorderEventData = (
+  EventData |
+  { event: 'resetCallLogs' | 'codeChanged' | 'cursorActivity', params: Record<string, unknown> } |
+  { event: 'loadSession', params: LoadSessionParams }
+) & { type: string };
 
 export interface RecorderWindow {
   isClosed(): boolean;
@@ -51,7 +60,7 @@ export interface RecorderWindow {
   focus: () => Promise<void>;
   close: () => Promise<void>;
   onMessage?: ({ type, event, params }: RecorderEventData) => void;
-  hideApp?: () => any;
+  hideApp?: () => void;
 }
 
 export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
@@ -222,34 +231,41 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
           }
           break;
         case 'codeChanged':
-          this._updateCode(params.code);
+          this._updateCode((params as { code: string }).code);
           break;
         case 'cursorActivity':
-          this._currentCursorPosition = params.position;
+          this._currentCursorPosition = (params as { position: { line: number } }).position;
           this._updateLocator(this._currentCursorPosition);
           break;
         case 'resume':
         case 'step':
           this._run().catch(() => {});
           break;
-        case 'setMode':
-          const { mode } = params;
+        case 'setMode': {
+          const mode = (params as { mode: Mode }).mode;
           if (this._mode !== mode) {
             this._mode = mode;
             this.emit('modeChanged', { mode });
           }
           break;
+        }
         case 'loadSession': {
-          const { sources: loadSources, stepState: loadStepState, stepBodies: loadStepBodies } = params;
+          const loadParams = params as LoadSessionParams;
+          const loadSources = loadParams.sources;
+          const loadStepState = loadParams.stepState;
+          const loadStepBodies = loadParams.stepBodies;
           if (!loadSources || !Array.isArray(loadSources) || !loadStepState)
             break;
           this._recordedActions = [];
           this._sources = loadSources.map((s: Source) => ({ ...s, isRecorded: true }));
-          const primarySource = this._sources[0];
+          const primarySource = this._sources.find((s: Source) => s.id === 'playwright-test') ?? this._sources[0];
           if (primarySource?.text)
             this._updateCode(primarySource.text);
-          this.setSources(this._sources);
-          this._sendMessage({ type: 'recorder', method: 'setStepState', stepState: loadStepState, stepBodies: loadStepBodies });
+          if (this._sources)
+            this.setSources(this._sources);
+          queueMicrotask(() => {
+            this._sendMessage({ type: 'recorder', method: 'setStepState', stepState: loadStepState, stepBodies: loadStepBodies });
+          });
           break;
         }
       }
@@ -266,7 +282,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
       const incognitoCrxApp = await this._crx.get({ incognito });
       await incognitoCrxApp?.close({ closeWindows: true });
     }
-    const crxApp = await this._crx.get({ incognito }) ?? await this._crx.start({ incognito }, serverSideCallMetadata());
+    const crxApp = await this._crx.get({ incognito }) ?? await this._crx.start({ incognito });
     await this._crx.player.run(crxApp._context, this._getActions());
   }
 
@@ -288,14 +304,18 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
         return actions;
     }
 
-    const source = this._sources?.find(s => s.id === this._filename);
-    if (!source)
+    const filename = this._filename;
+    const source = this._sources?.find(s => s.id === filename);
+    if (!source || !filename)
       return [];
 
-    const actions = this._editedCode?.hasLoaded() && !this._editedCode.hasErrors() ? this._editedCode.actions() : this._recordedActions;
+    const actions = this._editedCode?.hasLoaded() && this._editedCode && !this._editedCode.hasErrors() ? this._editedCode.actions() : this._recordedActions;
 
     const { header } = source;
-    const languageGenerator = [...languageSet()].find(l => l.id === this._filename)!;
+    const languageGenerator = [...languageSet()].find(l => l.id === filename);
+    if (!languageGenerator)
+      return [];
+
     // we generate actions here to have a one-to-one mapping between actions and text
     // (source actions are filtered, only non-empty actions are included)
     const actionTexts = actions.map(a => languageGenerator.generateAction(a));
@@ -308,7 +328,7 @@ export class CrxRecorderApp extends EventEmitter implements IRecorderApp {
     return actions.map((action, index) => ({
       ...action,
       location: {
-        file: this._filename!,
+        file: filename,
         line: sourceLine(index),
         column: 1
       }
@@ -321,10 +341,10 @@ class EditedCode {
   private _recorder: Recorder;
   private _actions: ActionInContextWithLocation[] = [];
   private _highlight: SourceHighlight[] = [];
-  private _codeLoadDebounceTimeout: NodeJS.Timeout | undefined;
-  private _onLoaded?: () => any;
+  private _codeLoadDebounceTimeout: ReturnType<typeof setTimeout> | undefined;
+  private _onLoaded?: () => void;
 
-  constructor(recorder: Recorder, code: string, onLoaded?: () => any) {
+  constructor(recorder: Recorder, code: string, onLoaded?: () => void) {
     this.code = code;
     this._recorder = recorder;
     this._onLoaded = onLoaded;

@@ -17,14 +17,22 @@
   text-wrap: nowrap;
 }
 
-.dropdown-content a {
+.dropdown-content a,
+.dropdown-content .dropdown-link {
   color: var(--vscode-sideBarTitle-foreground);
   padding: 12px 16px;
   text-decoration: none;
   display: block;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
 }
 
-.dropdown-content a:hover {
+.dropdown-content a:hover,
+.dropdown-content .dropdown-link:hover {
   background-color: var(--vscode-toolbar-hoverBackground);
 }
 

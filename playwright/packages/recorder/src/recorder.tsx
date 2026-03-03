@@ -32,7 +32,7 @@ import { copy, useSetting } from '@web/uiUtils';
 import yaml from 'yaml';
 import { parseAriaSnapshot } from '@isomorphic/ariaSnapshot';
 
-export type RecorderViewMode = 'code' | 'testCase';
+export type RecorderViewMode = 'code' | 'testCase' | 'sessions';
 
 export type SessionSnapshot = {
   stepState: { currentStepIndex: number; stepDescriptions: string[] } | null;
@@ -47,6 +47,9 @@ export interface RecorderProps {
   onEditedCode?: (code: string) => any,
   onCursorActivity?: (position: { line: number }) => any,
   sessionsTabContent?: React.ReactNode,
+  sessionTitle?: string,
+  onSessionTitleChange?: (title: string) => void,
+  onSessionSnapshotChange?: (snapshot: SessionSnapshot) => void,
 }
 
 export interface RecorderHandle {
@@ -61,6 +64,9 @@ export const Recorder = React.forwardRef<RecorderHandle, RecorderProps>(function
   onEditedCode,
   onCursorActivity,
   sessionsTabContent,
+  sessionTitle,
+  onSessionTitleChange,
+  onSessionSnapshotChange,
 }, ref) {
   const [selectedFileId, setSelectedFileId] = React.useState<string | undefined>();
   const [runningFileId, setRunningFileId] = React.useState<string | undefined>();
@@ -71,14 +77,39 @@ export const Recorder = React.forwardRef<RecorderHandle, RecorderProps>(function
   const [stepState, setStepState] = React.useState<{ currentStepIndex: number; stepDescriptions: string[] } | null>(null);
   const [nextStepDescription, setNextStepDescription] = React.useState('');
   const [viewingStepIndex, setViewingStepIndex] = React.useState(0);
-  const [viewMode, setViewMode] = React.useState<RecorderViewMode>('code');
+  const [viewMode, setViewMode] = React.useState<RecorderViewMode>('testCase');
   const [stepBodies, setStepBodies] = React.useState<string[]>(['']);
+  const [footerExpanded, setFooterExpanded] = React.useState(false);
+  const [stepOrder, setStepOrder] = React.useState<number[]>([0]);
 
   React.useImperativeHandle(ref, () => ({
     getSessionSnapshot(): SessionSnapshot {
-      return { stepState, stepBodies };
+      if (!stepState)
+        return { stepState: null, stepBodies };
+      const reorderedDescriptions = stepOrder.map(i => stepState.stepDescriptions[i] ?? `Step ${i + 1}`);
+      const reorderedBodies = stepOrder.map(i => stepBodies[i] ?? '');
+      const currentDisplayIndex = stepOrder.indexOf(stepState.currentStepIndex);
+      return {
+        stepState: { currentStepIndex: currentDisplayIndex >= 0 ? currentDisplayIndex : 0, stepDescriptions: reorderedDescriptions },
+        stepBodies: reorderedBodies,
+      };
     },
-  }), [stepState, stepBodies]);
+  }), [stepState, stepBodies, stepOrder]);
+
+  React.useEffect(() => {
+    if (!onSessionSnapshotChange) return;
+    if (!stepState) {
+      onSessionSnapshotChange({ stepState: null, stepBodies });
+      return;
+    }
+    const reorderedDescriptions = stepOrder.map(i => stepState.stepDescriptions[i] ?? `Step ${i + 1}`);
+    const reorderedBodies = stepOrder.map(i => stepBodies[i] ?? '');
+    const currentDisplayIndex = stepOrder.indexOf(stepState.currentStepIndex);
+    onSessionSnapshotChange({
+      stepState: { currentStepIndex: currentDisplayIndex >= 0 ? currentDisplayIndex : 0, stepDescriptions: reorderedDescriptions },
+      stepBodies: reorderedBodies,
+    });
+  }, [stepState, stepBodies, stepOrder, onSessionSnapshotChange]);
 
   React.useEffect(() => {
     window.playwrightSetStepState = (state: { currentStepIndex: number; stepDescriptions: string[] }, stepBodiesFromMsg?: string[]) => {
@@ -103,11 +134,15 @@ export const Recorder = React.forwardRef<RecorderHandle, RecorderProps>(function
       if (prev.length >= count) return prev.slice(0, count);
       return [...prev, ...Array(count - prev.length).fill('')];
     });
+    setStepOrder(prev => {
+      if (prev.length !== count)
+        return Array.from({ length: count }, (_, i) => i);
+      return prev;
+    });
   }, [stepState?.stepDescriptions?.length]);
 
   const fileId = selectedFileId || runningFileId || sources[0]?.id;
   const isRecording = ['recording', 'recording-inspecting', 'assertingText', 'assertingVisibility', 'assertingValue', 'assertingSnapshot'].includes(mode);
-  const currentStepLabel = stepState ? (stepState.stepDescriptions[stepState.currentStepIndex] ?? 'Start') : 'Start';
 
   const source = React.useMemo(() => {
     if (fileId) {
@@ -133,7 +168,8 @@ export const Recorder = React.forwardRef<RecorderHandle, RecorderProps>(function
   }, [source?.text]);
 
   const stepCount = Math.max(1, stepState?.stepDescriptions?.length ?? 1);
-  const stepRevealLine = viewingStepIndex >= 0 && viewingStepIndex < stepLineNumbers.length ? stepLineNumbers[viewingStepIndex] : undefined;
+  const physicalIndexForViewing = stepOrder[viewingStepIndex];
+  const stepRevealLine = physicalIndexForViewing != null && physicalIndexForViewing < stepLineNumbers.length ? stepLineNumbers[physicalIndexForViewing] : undefined;
   const codeRevealLine = stepRevealLine ?? source?.revealLine;
 
   const stepCodeBlocks = React.useMemo(() => {
@@ -291,6 +327,14 @@ export const Recorder = React.forwardRef<RecorderHandle, RecorderProps>(function
           title='Test case view'
           onClick={() => setViewMode('testCase')}
         >Test case</button>
+        {sessionsTabContent && (
+          <button
+            type='button'
+            className={'toolbar-button' + (viewMode === 'sessions' ? ' toggled' : '')}
+            title='Sessions'
+            onClick={() => setViewMode('sessions')}
+          >Sessions</button>
+        )}
       </div>
       <div>Target:</div>
       <SourceChooser fileId={fileId} sources={sources} setFileId={fileId => {
@@ -302,12 +346,22 @@ export const Recorder = React.forwardRef<RecorderHandle, RecorderProps>(function
         window.dispatch({ event: 'clear' });
       }}></ToolbarButton>
       <ToolbarButton icon='color-mode' title='Toggle color mode' toggled={false} onClick={() => toggleTheme()}></ToolbarButton>
+      <ToolbarButton
+        icon={footerExpanded ? 'chevron-down' : 'chevron-up'}
+        title={footerExpanded ? 'Hide Locator / Log / Aria' : 'Show Locator / Log / Aria'}
+        onClick={() => setFooterExpanded(v => !v)}
+      />
     </Toolbar>
     <SplitView
       sidebarSize={200}
-      main={viewMode === 'testCase'
+      sidebarHidden={!footerExpanded}
+      main={viewMode === 'sessions' && sessionsTabContent
+        ? <div className='recorder-sessions-main'>{sessionsTabContent}</div>
+        : viewMode === 'testCase'
         ? <TestCaseView
             stepState={stepState}
+            stepOrder={stepOrder}
+            currentStepIndex={viewingStepIndex}
             stepCodeBlocks={stepCodeBlocks}
             stepBodies={stepBodies}
             onStepBodyChange={(stepIndex, text) => setStepBodies(prev => {
@@ -316,17 +370,70 @@ export const Recorder = React.forwardRef<RecorderHandle, RecorderProps>(function
               return next;
             })}
             onAddStep={description => {
-              window.dispatch({ event: 'advanceStep', params: { description } }).catch(() => {});
+              setStepState(prev => {
+                const nextIndex = prev ? prev.currentStepIndex + 1 : 1;
+                const nextDescriptions = prev ? [...prev.stepDescriptions, description] : ['Start', description];
+                return { currentStepIndex: nextIndex, stepDescriptions: nextDescriptions };
+              });
+              setStepBodies(prev => [...prev, '']);
               setNextStepDescription('');
+              window.dispatch({ event: 'advanceStep', params: { description } }).catch(() => {});
             }}
             nextStepDescription={nextStepDescription}
             onNextStepDescriptionChange={setNextStepDescription}
             isRecording={isRecording}
+            sessionTitle={sessionTitle}
+            onSessionTitleChange={onSessionTitleChange}
+            onSelectStep={setViewingStepIndex}
+            onReorderSteps={(fromIndex, toIndex) => {
+              setStepOrder(prev => {
+                const next = [...prev];
+                const [removed] = next.splice(fromIndex, 1);
+                next.splice(toIndex, 0, removed);
+                return next;
+              });
+              setViewingStepIndex(prev => {
+                if (prev === fromIndex) return toIndex;
+                if (fromIndex < toIndex && prev > fromIndex && prev <= toIndex) return prev - 1;
+                if (fromIndex > toIndex && prev >= toIndex && prev < fromIndex) return prev + 1;
+                return prev;
+              });
+            }}
+            onStepDescriptionChange={(physicalIndex, description) => {
+              setStepState(prev => prev ? { ...prev, stepDescriptions: prev.stepDescriptions.map((d, i) => i === physicalIndex ? description : d) } : null);
+            }}
+            onDeleteStep={(physicalIndex) => {
+              setStepState(prev => {
+                if (!prev || prev.stepDescriptions.length <= 1) return prev;
+                const newDescriptions = prev.stepDescriptions.filter((_, i) => i !== physicalIndex);
+                const newCurrent = prev.currentStepIndex === physicalIndex
+                  ? Math.max(0, physicalIndex - 1)
+                  : prev.currentStepIndex > physicalIndex
+                    ? prev.currentStepIndex - 1
+                    : prev.currentStepIndex;
+                return { currentStepIndex: newCurrent, stepDescriptions: newDescriptions };
+              });
+              setStepBodies(prev => prev.length <= 1 ? prev : prev.filter((_, i) => i !== physicalIndex));
+              setStepOrder(prev => {
+                const deletedDisplayIndex = prev.indexOf(physicalIndex);
+                if (deletedDisplayIndex === -1) return prev;
+                return prev.filter(p => p !== physicalIndex).map(p => p > physicalIndex ? p - 1 : p);
+              });
+              setViewingStepIndex(prev => {
+                const deletedDisplayIndex = stepOrder.indexOf(physicalIndex);
+                if (prev === deletedDisplayIndex) return Math.max(0, deletedDisplayIndex - 1);
+                if (prev > deletedDisplayIndex) return prev - 1;
+                return prev;
+              });
+            }}
           />
         : <CodeMirrorWrapper text={source.text} language={source.language} highlight={codeHighlight} revealLine={codeRevealLine} readOnly={source.id !== 'playwright-test'} onChange={onEditedCode} onCursorActivity={onCursorActivity} lineNumbers={true} />}
       sidebar={<div className='recorder-sidebar' style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
         <TabbedPane
-          rightToolbar={selectedTab === 'locator' || selectedTab === 'aria' ? [<ToolbarButton key={1} icon='files' title='Copy' onClick={() => copy((selectedTab === 'locator' ? locator : ariaSnapshot) || '')} />] : []}
+          rightToolbar={[
+            ...(selectedTab === 'locator' || selectedTab === 'aria' ? [<ToolbarButton key='copy' icon='files' title='Copy' onClick={() => copy((selectedTab === 'locator' ? locator : ariaSnapshot) || '')} />] : []),
+            <ToolbarButton key='collapse' icon='chevron-down' title='Hide panel' onClick={() => setFooterExpanded(false)} />,
+          ]}
           tabs={[
             {
               id: 'locator',
@@ -343,56 +450,10 @@ export const Recorder = React.forwardRef<RecorderHandle, RecorderProps>(function
               title: 'Aria',
               render: () => <CodeMirrorWrapper text={ariaSnapshot || ''} placeholder='Type aria template to match' language={'yaml'} onChange={onAriaEditorChange} highlight={ariaSnapshotErrors} wrapLines={true} />
             },
-            ...(sessionsTabContent ? [{
-              id: 'sessions',
-              title: 'Sessions',
-              render: () => <>{sessionsTabContent}</>,
-            }] : []),
           ]}
           selectedTab={selectedTab}
           setSelectedTab={setSelectedTab}
         />
-        {isRecording && <div className='recorder-step-section'>
-          <div className='step-label'>Current step: {currentStepLabel}</div>
-          <div className='step-nav-row'>
-            <div className='step-nav-buttons'>
-              <button
-                className='toolbar-button'
-                type='button'
-                title='Go to previous step'
-                disabled={viewingStepIndex <= 0}
-                onClick={() => setViewingStepIndex(i => Math.max(0, i - 1))}
-              >Prev</button>
-              <button
-                className='toolbar-button'
-                type='button'
-                title='Go to next step'
-                disabled={viewingStepIndex >= stepCount - 1}
-                onClick={() => setViewingStepIndex(i => Math.min(stepCount - 1, i + 1))}
-              >Next</button>
-            </div>
-            <span style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground)' }}>
-              Step {viewingStepIndex + 1} of {stepCount}
-            </span>
-          </div>
-          <div className='step-add-row'>
-            <input
-              type='text'
-              placeholder='Next step description'
-              value={nextStepDescription}
-              onChange={e => setNextStepDescription(e.target.value)}
-            />
-            <button
-              className='toolbar-button'
-              type='button'
-              onClick={() => {
-                const description = nextStepDescription.trim() || `Step ${(stepState?.currentStepIndex ?? 0) + 2}`;
-                window.dispatch({ event: 'advanceStep', params: { description } }).catch(() => {});
-                setNextStepDescription('');
-              }}
-            >Add step</button>
-          </div>
-        </div>}
       </div>}
     />
   </div>;
